@@ -1,0 +1,101 @@
+# Flight Computer Firmware - Docker Compose Configuration
+# Supports the comprehensive test and build workflow using Alpine Linux
+
+version: '3.8'
+
+services:
+  # Test Runner Environment
+  fcf-test:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM alpine:latest
+        RUN apk add --no-cache \
+            python3 \
+            py3-pip \
+            make \
+            gcc \
+            g++ \
+            musl-dev \
+            git \
+            bash && \
+            python3 -m pip install --upgrade pip && \
+            pip install gcovr
+        WORKDIR /workspace
+        CMD ["/bin/bash"]
+    container_name: fcf-test-runner
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+
+  # ARM Cross-Compilation Build Environment
+  fcf-build:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM alpine:latest
+        ARG ARM_GCC_VERSION=9-2019-q4
+        RUN apk add --no-cache \
+            wget \
+            make \
+            git \
+            bash \
+            tar \
+            bzip2 && \
+            wget -q https://developer.arm.com/-/media/Files/downloads/gnu-rm/$${ARM_GCC_VERSION}/gcc-arm-none-eabi-$${ARM_GCC_VERSION}-linux.tar.bz2 && \
+            tar -xjf gcc-arm-none-eabi-$${ARM_GCC_VERSION}-linux.tar.bz2 -C /opt && \
+            rm gcc-arm-none-eabi-$${ARM_GCC_VERSION}-linux.tar.bz2
+        ENV PATH="/opt/gcc-arm-none-eabi-$${ARM_GCC_VERSION}/bin:$${PATH}"
+        WORKDIR /workspace
+        CMD ["/bin/bash"]
+    container_name: fcf-build-env
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+
+  # Combined Development Environment (includes both test and build tools)
+  fcf-dev:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM alpine:latest
+        ARG ARM_GCC_VERSION=9-2019-q4
+        RUN apk add --no-cache \
+            python3 \
+            py3-pip \
+            make \
+            gcc \
+            g++ \
+            musl-dev \
+            git \
+            wget \
+            curl \
+            vim \
+            bash \
+            tar \
+            bzip2 && \
+            python3 -m pip install --upgrade pip && \
+            pip install gcovr && \
+            wget -q https://developer.arm.com/-/media/Files/downloads/gnu-rm/$${ARM_GCC_VERSION}/gcc-arm-none-eabi-$${ARM_GCC_VERSION}-linux.tar.bz2 && \
+            tar -xjf gcc-arm-none-eabi-$${ARM_GCC_VERSION}-linux.tar.bz2 -C /opt && \
+            rm gcc-arm-none-eabi-$${ARM_GCC_VERSION}-linux.tar.bz2
+        ENV PATH="/opt/gcc-arm-none-eabi-$${ARM_GCC_VERSION}/bin:$${PATH}"
+        WORKDIR /workspace
+        CMD ["/bin/bash"]
+    container_name: fcf-dev-env  
+    volumes:
+      - .:/workspace
+      - fcf-cache:/tmp/fcf-cache
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    ports:
+      - "8080:8080"  # For any web-based tools or documentation servers
+
+volumes:
+  fcf-cache:
+    driver: local
